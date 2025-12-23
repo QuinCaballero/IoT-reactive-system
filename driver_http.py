@@ -168,11 +168,11 @@ def app_server(sources):
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
             <div class="bg-white rounded-xl shadow-lg p-6">
                 <h2 class="text-2xl font-semibold mb-4">Temperatura (°C)</h2>
-                <canvas id="tempChart" height="300"></canvas>
+                <canvas id="tempChart" height="300" maintainAspectRatio: false></canvas>
             </div>
             <div class="bg-white rounded-xl shadow-lg p-6">
                 <h2 class="text-2xl font-semibold mb-4">Humedad (%)</h2>
-                <canvas id="humChart" height="300"></canvas>
+                <canvas id="humChart" height="300" maintainAspectRatio: false></canvas>
             </div>
         </div>
 
