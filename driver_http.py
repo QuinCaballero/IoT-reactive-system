@@ -2,8 +2,10 @@ import asyncio
 from aiohttp import web
 import reactivex as rx
 from reactivex import operators as ops
+import logging
 import json
 from models import SensorData, ValidationError as PydanticValidationError
+
 
 def http_driver(sink, loop):
     app = None
@@ -201,4 +203,3 @@ def app_server(sources):
     return {
         'http': rx.merge(init, listener),
     }
-

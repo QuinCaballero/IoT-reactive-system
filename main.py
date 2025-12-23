@@ -11,6 +11,8 @@ import logging
 # Components
 from driver_http import http_driver, app_server  # app_server ahora es función
 from processor import data_processor
+from driver_mongo import mongo_persistence
+from motor.motor_asyncio import AsyncIOMotorClient
 
 # Config the logging system
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -24,8 +26,20 @@ def main():
     asyncio.set_event_loop(loop)
     http_proxy = Subject()
     processor_proxy = Subject()
-    
     dataframe_subject = BehaviorSubject(pd.DataFrame())
+    
+    # === Conexión a MongoDB ===
+    mongo_client = AsyncIOMotorClient('mongodb://localhost:27017/')
+
+    # Verificamos conexión al inicio
+    async def check_mongo():
+        try:
+            await mongo_client.admin.command('ping')
+            logging.info("Conexión a MongoDB establecida correctamente")
+        except Exception as e:
+            logging.error(f"No se pudo conectar a MongoDB: {e}")
+
+    loop.run_until_complete(check_mongo())
     
     sources = {
         'http': http_driver(http_proxy, loop),
@@ -33,8 +47,9 @@ def main():
         'dataframe': dataframe_subject,
     }
     
-    # Conectamos to processor getting dataframe_subject
+    # Module connections
     data_processor(sources, dataframe_subject)
+    mongo_persistence(sources, mongo_client)
     
     # Driver settings
     http_sinks = app_server(sources)  # ← Aquí le pasamos sources
@@ -48,14 +63,16 @@ def main():
     #     on_next=lambda df: logging.info(f"DataFrame actualizado: {df.shape}")
     # )
     
+    # Dataframe in memory
     dataframe_subject.subscribe(
-        on_next=lambda df: logging.info(f"DataFrame actualizado: {df.shape} filas")
+        on_next=lambda df: logging.info(f"DataFrame in memory: {df.shape} filas")
     )
     # Ver próximos pasos
 
-    print("=== Server ready ===")
+    print("=== Server IoT with Mongo ready ===")
     print("POST http://localhost:8080/sensor_data → send data")
     print("GET  http://localhost:8080/data         → check DataFrame aggregated")
+    print("Data persistence in MongoDB: sensor_db.sensor_data")
     print("Ctrl+C to exit")
 
     try:
@@ -63,6 +80,7 @@ def main():
     except KeyboardInterrupt:
         print("\nServer shutdown...")
     finally:
+        mongo_client.close()
         loop.close()
 
 if __name__ == '__main__':
