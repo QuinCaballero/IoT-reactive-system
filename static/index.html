@@ -99,7 +99,7 @@
                             tempChart = new Chart(document.getElementById('tempChart'), {
                                 type: 'line',
                                 data: { labels, datasets: datasetsTemp },
-                                options: { responsive: true, maintainAspectRatio: false }
+                                options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 100 } } }
                             });
                         } else {
                             tempChart.data = { labels, datasets: datasetsTemp };
