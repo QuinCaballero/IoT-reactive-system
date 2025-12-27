@@ -25,23 +25,32 @@ def http_driver(sink, loop):
                 }
                 observer.on_next(request_item)
                 await response_future
-                data_bytes, status = response_future.result()
+
+                # === Aquí está la clave: manejamos ambos formatos ===
+                result = response_future.result()
+
+                if isinstance(result, dict):
+                    # Formato nuevo con headers (para redirección, HTML, etc.)
+                    data_bytes = result.get('data', b'')
+                    status = result.get('status', 200)
+                    headers = result.get('headers', {})
+                else:
+                    # Formato antiguo compatible: tupla (data, status)
+                    data_bytes, status = result
+                    headers = {}
 
                 response = web.StreamResponse(status=status)
                 
-                # Detectar si es HTML
-                if isinstance(data_bytes, bytes) and data_bytes:
-                    stripped = data_bytes.lstrip()
-                    if stripped.startswith(b'<!DOCTYPE html>') or stripped.startswith(b'<html'):
-                        response.content_type = "text/html; charset=utf-8"
-                    else:
-                        response.content_type = "application/json"
-                else:
+                # Aplicamos headers personalizados
+                for key, value in headers.items():
+                    response.headers[key] = value
+                
+                # Content-Type por defecto si no se especificó
+                if 'Content-Type' not in response.headers:
                     response.content_type = "application/json"
-                
-                
+
                 await response.prepare(request)
-                if data_bytes is not None:
+                if data_bytes:
                     await response.write(data_bytes)
                 await response.drain()
                 return response
@@ -61,12 +70,18 @@ def http_driver(sink, loop):
         def on_sink_item(i):
             nonlocal runner
             if i['what'] == 'response':
-                i['context'].set_result((i.get('data', b''), i.get('status', 200)))
+                # Soporte completo para headers en redirecciones y respuestas custom
+                response_data = {
+                    'data': i.get('data', b''),
+                    'status': i.get('status', 200),
+                    'headers': i.get('headers', {})  # ← Clave para Location
+                }
+                i['context'].set_result(response_data)
             elif i['what'] == 'add_route':
                 add_route(app, i['methods'], i['path'])
             elif i['what'] == 'start_server':
                 start_server(i['host'], i['port'], app)
-
+                
         app = web.Application()
         sink.subscribe(on_next=on_sink_item)
 
@@ -152,36 +167,48 @@ def app_server(sources):
                 }
 
             elif method == 'GET' and path == '/':
-                try:
-                    # Ruta absoluta al index.html, relativa al ubicación de este archivo
-                    base_dir = Path(__file__).parent.resolve()  # Directorio de driver_http.py
-                    html_path = base_dir / "static" / "index.html"
-
-                    if not html_path.exists():
-                        logging.error(f"Archivo HTML no encontrado: {html_path}")
-                        return {
-                            'what': 'response',
-                            'status': 500,
-                            'context': request_item['context'],
-                            'data': b"Internal Server Error: index.html not found"
-                        }
-
-                    html = html_path.read_text(encoding='utf-8')
-
-                    return {
-                        'what': 'response',
-                        'status': 200,
-                        'context': request_item['context'],
-                        'data': html.encode('utf-8')
+                # Redirección permanente al dashboard Dash - Debe de festar funcionando
+                return {
+                    'what': 'response',
+                    'status': 302,  # 302 Found (redirección temporal) o 301 si quieres permanente
+                    'context': request_item['context'],
+                    'data': b'',  # Sin cuerpo
+                    'headers': {
+                        'Location': 'http://localhost:8050/',
+                        'Content-Type': 'text/plain'  # Opcional, pero ayuda
                     }
-                except Exception as e:
-                    logging.error(f"Error cargando HTML: {e}")
-                    return {
-                        'what': 'response',
-                        'status': 500,
-                        'context': request_item['context'],
-                        'data': b"Internal Server Error"
-                    }
+                }
+                
+                # try:
+                #     # Ruta absoluta al index.html, relativa al ubicación de este archivo
+                #     base_dir = Path(__file__).parent.resolve()  # Directorio de driver_http.py
+                #     html_path = base_dir / "static" / "index.html"
+
+                #     if not html_path.exists():
+                #         logging.error(f"Archivo HTML no encontrado: {html_path}")
+                #         return {
+                #             'what': 'response',
+                #             'status': 500,
+                #             'context': request_item['context'],
+                #             'data': b"Internal Server Error: index.html not found"
+                #         }
+
+                #     html = html_path.read_text(encoding='utf-8')
+
+                #     return {
+                #         'what': 'response',
+                #         'status': 200,
+                #         'context': request_item['context'],
+                #         'data': html.encode('utf-8')
+                #     }
+                # except Exception as e:
+                #     logging.error(f"Error cargando HTML: {e}")
+                #     return {
+                #         'what': 'response',
+                #         'status': 500,
+                #         'context': request_item['context'],
+                #         'data': b"Internal Server Error"
+                #     }
 
             else:
                 return {
