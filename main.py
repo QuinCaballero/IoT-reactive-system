@@ -46,10 +46,10 @@ def main():
         'processor': processor_proxy,
         'dataframe': dataframe_subject,
     }
-    
+
     # Module connections
     data_processor(sources, dataframe_subject)
-    mongo_persistence(sources, mongo_client)
+    mongo_outputs = mongo_persistence(sources, mongo_client)
     
     # Driver settings
     http_sinks = app_server(sources)  # ← Aquí le pasamos sources
@@ -76,6 +76,7 @@ def main():
     print("Ctrl+C to exit")
 
     try:
+        mongo_outputs['start_cleanup'](loop)
         loop.run_forever()
     except KeyboardInterrupt:
         print("\nServer shutdown...")
